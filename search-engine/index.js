@@ -1,11 +1,13 @@
 const elasticsearch = require('elasticsearch');
-const client = new elasticsearch.Client({
-  hosts: ['http://localhost:9200']
-});
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser')
 const path = require('path');
+const cookieSession = require('cookie-session');
+
+const client = new elasticsearch.Client({
+  hosts: ['http://localhost:9200']
+});
 
 client.ping({
   requestTimeout: 30000,
@@ -17,6 +19,13 @@ client.ping({
   }
 });
 
+app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use(cookieSession({
+  name: 'session',
+  keys: ['key1', 'key2'],
+  maxAge:  3600 * 1000 // 1hr
+}));
 
 // use the bodyparser as a middleware  
 app.use(bodyParser.json())
@@ -32,17 +41,88 @@ app.use(function (req, res, next) {
   next();
 });
 
-// defined the base route and return with an HTML file called tempate.html
-app.get('/', function (req, res) {
-  res.sendFile('login-register.ejs', {
+const ifLoggedin = (req,res,next) => {
+  console.log(req.session);
+  if(req.session.isLoggedIn){
+      return res.redirect('/home.html',{
+          root: path.join(__dirname, 'views')
+      });
+  }
+  next();
+}
+
+// defined the base route and return with an HTML file called login-register.html
+app.get('/', ifLoggedin, function (req, res) {
+  res.sendFile('login-register.html', {
     root: path.join(__dirname, 'views')
   });
-})
+});
 
-// define the /search route that should return elastic search results 
+app.post('/login', function (req, res) {
+  let body = {
+    size: 1,
+    from: 0,
+    query: {
+      bool: {
+        must: [
+          {
+            match: {
+              "email.keyword": req.body.user_email
+            }
+          },
+          {
+            match: {
+              "password.keyword": req.body.user_pass
+            }
+          }
+        ]
+      }
+    }
+  }
+
+  client.search({ index: 'user', body: body, type: 'login' })
+    .then(results => {
+      if (results.hits.hits.length > 0) {
+        res.sendFile('home.html', {
+          root: path.join(__dirname, 'views')
+        });
+      } else {
+        res.send('invalid email or password')
+      }
+    })
+    .catch(err => {
+      console.log(err)
+      res.send([]);
+    });
+});
+
+app.post('/register', function (req, res) {
+  const payload = {
+    "name": req.body.user_name,
+    "email": req.body.user_email,
+    "password": req.body.user_pass
+  }
+  client.index({
+    index: "user",
+    type: "login",
+    body: payload
+  }).then(resp => {
+    res.sendFile('home.html', {
+      root: path.join(__dirname, 'views')
+    });
+  }).catch(err => {
+    console.log(err)
+    res.send('Error in storing user details to user table');
+  });
+});
+
+app.get('/logout', (req, res) => {
+  //session destroy
+  req.session = null;
+  res.redirect('/');
+});
+
 app.get('/search', function (req, res) {
-  // declare the query object to search elastic search and return only 200 results from the first result found. 
-  // also match any data where the name is like the query string sent in
   let body = {
     size: 200,
     from: 0,
@@ -52,7 +132,6 @@ app.get('/search', function (req, res) {
       }
     }
   }
-  // perform the actual search passing in the index, the search query and the type
   client.search({ index: 'scotch.io-tutorial', body: body, type: 'cities_list' })
     .then(results => {
       res.send(results.hits.hits);
@@ -63,7 +142,6 @@ app.get('/search', function (req, res) {
     });
 
 })
-// listen on the specified port
 app.listen(app.get('port'), function () {
   console.log('Express server listening on port ' + app.get('port'));
 });
