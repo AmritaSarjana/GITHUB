@@ -34,7 +34,7 @@ app.use(function (req, res, next) {
 
 // defined the base route and return with an HTML file called tempate.html
 app.get('/', function (req, res) {
-  res.sendFile('template.html', {
+  res.sendFile('login-register.ejs', {
     root: path.join(__dirname, 'views')
   });
 })
