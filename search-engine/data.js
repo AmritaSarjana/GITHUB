@@ -1,10 +1,7 @@
-//require the Elasticsearch librray
 const elasticsearch = require('elasticsearch');
-// instantiate an Elasticsearch client
 const client = new elasticsearch.Client({
     hosts: ['http://localhost:9200']
 });
-// ping the client to be sure Elasticsearch is up
 client.ping({
     requestTimeout: 30000,
 }, function (error) {
@@ -27,7 +24,6 @@ client.ping({
 // });
 
 const cities = require('./cities.json');
-// declare an empty array called bulk
 var bulk = [];
 //loop through each city and create and push two objects into the array in each loop
 //first object sends the index and type you will be saving the data as
@@ -41,7 +37,6 @@ cities.forEach(city => {
     })
     bulk.push(city)
 })
-//perform bulk indexing of the data passed
 client.bulk({ body: bulk }, function (err, response) {
     if (err) {
         console.log("Failed Bulk operation".red, err)
