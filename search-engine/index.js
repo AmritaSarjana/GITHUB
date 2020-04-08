@@ -3,7 +3,7 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser')
 const path = require('path');
-const cookieSession = require('cookie-session');
+var session = require('express-session')
 
 const client = new elasticsearch.Client({
   hosts: ['http://localhost:9200']
@@ -19,21 +19,18 @@ client.ping({
   }
 });
 
-app.use(bodyParser.urlencoded({ extended: true }));
-
-app.use(cookieSession({
-  name: 'session',
-  keys: ['key1', 'key2'],
-  maxAge:  3600 * 1000 // 1hr
+app.use(session({
+  secret: 'secret santa',
 }));
 
-// use the bodyparser as a middleware  
-app.use(bodyParser.json())
-// set port for the app to listen on
+app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use(bodyParser.json());
+
 app.set('port', process.env.PORT || 3001);
-// set path to serve static files
-app.use(express.static(path.join(__dirname, 'public')));
-// enable CORS 
+
+app.use(express.static(path.join(__dirname, 'views')));
+
 app.use(function (req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
   res.header('Access-Control-Allow-Methods', 'PUT, GET, POST, DELETE, OPTIONS');
@@ -41,21 +38,18 @@ app.use(function (req, res, next) {
   next();
 });
 
-const ifLoggedin = (req,res,next) => {
-  console.log(req.session);
-  if(req.session.isLoggedIn){
-      return res.redirect('/home.html',{
-          root: path.join(__dirname, 'views')
-      });
-  }
-  next();
-}
-
 // defined the base route and return with an HTML file called login-register.html
-app.get('/', ifLoggedin, function (req, res) {
-  res.sendFile('login-register.html', {
-    root: path.join(__dirname, 'views')
-  });
+app.get('/', function (req, res) {
+  if (req.session.user_name) {
+    return res.sendFile('home.html', {
+      root: path.join(__dirname, 'views')
+    });
+  } else {
+    req.session.user_name = 'amrita';
+    res.sendFile('login-register.html', {
+      root: path.join(__dirname, 'views')
+    });
+  }
 });
 
 app.post('/login', function (req, res) {
